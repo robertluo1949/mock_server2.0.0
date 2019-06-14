@@ -1,0 +1,19 @@
+---
+- name: deploy gearbox
+  gather_facts: False
+  hosts: 10.40.56.133
+
+  tasks:
+    - name: test
+      shell: ip a
+    - name: Downlaod from artifactory
+      get_url:
+        url: "https://it-artifactory.yitu-inc.com/IST-SH/XJbox/test/box-xj-mockserver.tar"
+        dest: "~/box-xj-mockserver"
+        mode: "0755"
+        url_username: "yuankui.ji"
+        url_password: "Sf6%3qL#"
+        force: yes
+
+    - name: tar
+      shell: tar -xvf  ~/test/box-xj-mockserver.tar.gz -C ~/box-xj-mockserver/

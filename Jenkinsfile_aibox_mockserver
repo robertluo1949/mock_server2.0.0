@@ -1,0 +1,127 @@
+#!/usr/bin/env groovy
+@Library('jenkins-common') _
+pipeline {
+  agent {
+    node {
+        label 'ISTSH-build'
+    }
+  }
+  tools {
+			jdk 'JDK8u172'
+  }
+  environment {
+		SRC_DIR = 'box-xj-mockserver'
+		HOST_SERVER= '10.40.56.133:5000'
+  }
+
+  parameters {
+       booleanParam(name: 'build', defaultValue: true, description: '是否执行编译打包')
+       booleanParam(name: 'deploy', defaultValue: true, description: '是否执行自动部署')
+       booleanParam(name: 'email', defaultValue: false, description: '是否执行发送邮件报告')
+       string(name: 'ip', defaultValue: '10.40.56.133', description: '目标服务器')
+       string(name: 'package_name', defaultValue: 'box-xj-mockserver', description: '目标服务器')
+
+  }
+
+  options {
+        timeout(time: 1, unit: 'HOURS')
+        timestamps()
+        ansiColor('xterm')
+  }
+
+  stages{
+    stage("Build"){
+        steps {
+            script {
+				if (params.deploy){
+                    echo "start deploy " + params.package_name + " to " + params.ip
+                        sh """
+                            rm -rf ${SRC_DIR}
+                            mkdir ${SRC_DIR}
+                            set SRC_DIR='box-xj-mockserver'
+                            ls -altr
+                            pwd
+                            ifconfig
+                            python3.5 --version
+                            cp -r `ls -A |grep -v "${SRC_DIR}" |grep -v ".git"` ${SRC_DIR}/
+                            ls -altr "${SRC_DIR}"
+                            ##virtualenv -p python3.5 ./venv
+                            ##source venv/bin/activate
+                            ##pip3.5 install --upgrade pip
+                            ##pip3.5 install -r requirements.txt
+                            ##python3.5 setup.py bdist_wheel upload -r local
+                            ##deactivate
+                            tar -cvf ${SRC_DIR}.tar.gz ./${SRC_DIR}
+                            pwd
+                            ls -altr
+                        """
+                    def server = Artifactory.server "istsh-rt-server"
+                    artifact_upload_spec = """
+                    {
+                        "files": [{
+                        "pattern": ".${SRC_DIR}.tar.gz",
+                        "target": "IST-SH/XJbox/test/"
+                        }]
+                    }
+                    """
+                    server.upload(artifact_upload_spec)
+
+
+    			}
+    	}
+		}
+	}
+
+	stage("Deploy"){
+		steps{
+			script{
+				if (params.deploy){
+                    echo "OK"
+
+				}
+				else {
+					echo '不进行部署'
+				}
+			}
+		}
+	}
+
+
+	stage("SendEmail"){
+		steps{
+			script{
+			    if (params.email){
+
+                     sh """
+                        echo "OK"
+
+                     """
+				}
+				    else {
+					    echo '不进行邮件发送测试报告'
+				}
+
+			}
+		}
+	}
+	stage('call pot') {
+            steps {
+            ansibleTower(
+                towerServer: 'Pot-IST-SH-R5T',                      // 伸手要
+                templateType: 'job',
+                jobTemplate: 'IST-SH-box-xj-mockserver',                      // 建完才有
+                importTowerLogs: true,
+                jobTags: '',
+                skipJobTags: '',
+                limit: '',
+                removeColor: false,
+                verbose: true,
+                credential: '',
+                extraVars: '''---
+                        api_key: xxxx
+                        package_path: "https://it-artifactory.yitu-inc.com:443/IST-SH/XJbox/test/${SRC_DIR}.tar.gz"'''
+        )
+    }
+	}
+  }
+}
